@@ -390,26 +390,62 @@ async function main() {
   // Categories
   // ------------------------------------------------
 
-  const categories = [
-    "Pasta",
-    "Pizza",
-    "Salad",
-    "Soup",
-    "Dessert",
-    "Breakfast",
-    "Main Course",
-    "Appetizer",
-    "Snack",
-    "Side Dish",
-  ];
+ const categories = [
+  {
+    name: "Pasta",
+    image: "/category/pasta.svg",
+  },
+  {
+    name: "Pizza",
+    image: "/category/pizza.svg",
+  },
+  {
+    name: "Salad",
+    image: "/category/salad.svg",
+  },
+  {
+    name: "Soup",
+    image: "/category/soup.svg",
+  },
+  {
+    name: "Dessert",
+    image: "/category/dessert.svg",
+  },
+  {
+    name: "Breakfast",
+    image: "/category/breakfast.svg",
+  },
+  {
+    name: "Main Course",
+    image: "/category/main-course.svg",
+  },
+  {
+    name: "Appetizer",
+    image: "/category/appetizer.svg",
+  },
+  {
+    name: "Snack",
+    image: "/category/snack.svg",
+  },
+  {
+    name: "Side Dish",
+    image: "/category/side-dish.svg",
+  },
+];
 
-  for (const name of categories) {
-    await prisma.category.upsert({
-      where: { name },
-      update: {},
-      create: { name },
-    });
-  }
+for (const category of categories) {
+  await prisma.category.upsert({
+    where: { name: category.name },
+    update: {
+      image: category.image,
+    },
+    create: {
+      name: category.name,
+      image: category.image,
+    },
+  });
+}
+
 
   // ------------------------------------------------
   // Cuisines

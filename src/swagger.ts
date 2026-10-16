@@ -21,6 +21,10 @@ const swaggerDocument = {
       description: "User registration, login and session management",
     },
     {
+      name: "Categories",
+      description: "Recipe categories",
+    },
+    {
       name: "Recipes",
       description: "Recipe management and discovery",
     },
@@ -83,6 +87,26 @@ const swaggerDocument = {
           normalizedName: {
             type: "string",
             example: "chicken",
+          },
+        },
+      },
+
+      Category: {
+        type: "object",
+        properties: {
+          id: {
+            type: "string",
+            example: "cmcategory123",
+          },
+          name: {
+            type: "string",
+            example: "Pasta",
+          },
+          image: {
+            type: "string",
+            nullable: true,
+            example:
+              "https://images.unsplash.com/photo-1551183053-bf91a1d81141",
           },
         },
       },
@@ -276,6 +300,42 @@ const swaggerDocument = {
     // Recipes
     // =========================
 
+    // =========================
+    // Categories
+    // =========================
+
+    "/api/categories": {
+      get: {
+        tags: ["Categories"],
+        summary: "Get all categories",
+        description: "Retrieve all recipe categories with their images.",
+
+        responses: {
+          "200": {
+            description: "Categories retrieved successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    categories: {
+                      type: "array",
+                      items: {
+                        $ref: "#/components/schemas/Category",
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          "500": {
+            description: "Internal server error",
+          },
+        },
+      },
+    },
+
     "/api/recipes": {
       get: {
         tags: ["Recipes"],
@@ -291,6 +351,16 @@ const swaggerDocument = {
               type: "string",
             },
             description: "Search recipes by title",
+          },
+          {
+            name: "category",
+            in: "query",
+            required: false,
+            description: "Filter recipes by category name",
+            schema: {
+              type: "string",
+              example: "Pasta",
+            },
           },
           {
             name: "cuisine",
@@ -1269,6 +1339,219 @@ const swaggerDocument = {
         },
       },
     },
+
+    
+"/api/planner/queue": {
+  get: {
+    tags: ["Meal Planner"],
+    summary: "Get the user's meal plan queue",
+    description: "Retrieve all recipes waiting to be scheduled for the authenticated user.",
+    security: [{ sessionCookie: [] }],
+    responses: {
+      "200": {
+        description: "Meal plan queue retrieved successfully",
+      },
+      "401": { description: "Authentication required" },
+      "500": { description: "Internal server error" },
+    },
+  },
+},
+
+"/api/planner/queue/{recipeId}": {
+  post: {
+    tags: ["Meal Planner"],
+    summary: "Add a recipe to the meal plan queue",
+    security: [{ sessionCookie: [] }],
+    parameters: [
+      {
+        name: "recipeId",
+        in: "path",
+        required: true,
+        schema: { type: "string" },
+        description: "The recipe ID to add to the queue",
+      },
+    ],
+    responses: {
+      "201": { description: "Recipe added to the queue successfully" },
+      "400": { description: "Invalid recipe ID" },
+      "401": { description: "Authentication required" },
+      "404": { description: "Recipe not found" },
+      "409": { description: "Recipe already exists in the queue" },
+      "500": { description: "Internal server error" },
+    },
+  },
+
+  delete: {
+    tags: ["Meal Planner"],
+    summary: "Remove a recipe from the meal plan queue",
+    security: [{ sessionCookie: [] }],
+    parameters: [
+      {
+        name: "recipeId",
+        in: "path",
+        required: true,
+        schema: { type: "string" },
+        description: "The recipe ID to remove",
+      },
+    ],
+    responses: {
+      "200": { description: "Recipe removed from the queue successfully" },
+      "400": { description: "Invalid recipe ID" },
+      "401": { description: "Authentication required" },
+      "404": { description: "Recipe not found in the queue" },
+      "500": { description: "Internal server error" },
+    },
+  },
+},
+
+"/api/planner/queue/{recipeId}/schedule": {
+  post: {
+    tags: ["Meal Planner"],
+    summary: "Schedule a queued recipe",
+    description: "Schedule a queued recipe for a specific date and meal type. The recipe is removed from the queue after successful scheduling.",
+    security: [{ sessionCookie: [] }],
+    parameters: [
+      {
+        name: "recipeId",
+        in: "path",
+        required: true,
+        schema: { type: "string" },
+        description: "The recipe ID to schedule",
+      },
+    ],
+    requestBody: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: {
+            type: "object",
+            required: ["date", "mealTypeId"],
+            properties: {
+              date: {
+                type: "string",
+                format: "date",
+                example: "2026-10-15",
+              },
+              mealTypeId: {
+                type: "string",
+                example: "cm123mealtype",
+              },
+            },
+          },
+        },
+      },
+    },
+    responses: {
+      "201": { description: "Recipe scheduled successfully" },
+      "400": { description: "Invalid date or meal type" },
+      "401": { description: "Authentication required" },
+      "404": { description: "Recipe not in queue or meal type not found" },
+      "500": { description: "Internal server error" },
+    },
+  },
+},
+
+"/api/planner/meals": {
+  get: {
+    tags: ["Meal Planner"],
+    summary: "Get scheduled meals",
+    description: "Retrieve the authenticated user's planned meals within a date range.",
+    security: [{ sessionCookie: [] }],
+    parameters: [
+      {
+        name: "startDate",
+        in: "query",
+        required: true,
+        schema: { type: "string", format: "date" },
+        example: "2026-10-15",
+      },
+      {
+        name: "endDate",
+        in: "query",
+        required: true,
+        schema: { type: "string", format: "date" },
+        example: "2026-10-21",
+      },
+    ],
+    responses: {
+      "200": { description: "Scheduled meals retrieved successfully" },
+      "400": { description: "Invalid date range" },
+      "401": { description: "Authentication required" },
+      "500": { description: "Internal server error" },
+    },
+  },
+},
+
+"/api/planner/meals/{plannedMealId}": {
+  patch: {
+    tags: ["Meal Planner"],
+    summary: "Update a planned meal",
+    description: "Update the scheduled date, meal type, or both for an existing planned meal.",
+    security: [{ sessionCookie: [] }],
+    parameters: [
+      {
+        name: "plannedMealId",
+        in: "path",
+        required: true,
+        schema: { type: "string" },
+        description: "The planned meal ID, not the recipe ID",
+      },
+    ],
+    requestBody: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: {
+            type: "object",
+            properties: {
+              date: {
+                type: "string",
+                format: "date",
+                example: "2026-10-16",
+              },
+              mealTypeId: {
+                type: "string",
+                example: "cm123mealtype",
+              },
+            },
+            minProperties: 1,
+          },
+        },
+      },
+    },
+    responses: {
+      "200": { description: "Planned meal updated successfully" },
+      "400": { description: "Invalid update data" },
+      "401": { description: "Authentication required" },
+      "404": { description: "Planned meal or meal type not found" },
+      "500": { description: "Internal server error" },
+    },
+  },
+
+  delete: {
+    tags: ["Meal Planner"],
+    summary: "Delete a planned meal",
+    description: "Delete a scheduled meal belonging to the authenticated user.",
+    security: [{ sessionCookie: [] }],
+    parameters: [
+      {
+        name: "plannedMealId",
+        in: "path",
+        required: true,
+        schema: { type: "string" },
+        description: "The planned meal ID, not the recipe ID",
+      },
+    ],
+    responses: {
+      "200": { description: "Planned meal deleted successfully" },
+      "400": { description: "Invalid planned meal ID" },
+      "401": { description: "Authentication required" },
+      "404": { description: "Planned meal not found" },
+      "500": { description: "Internal server error" },
+    },
+  },
+},
+
   },
 };
 

@@ -17,7 +17,10 @@ model User {
   sessions     Session[]
   favorites Favorite[]
   shoppingListItems ShoppingListItem[]
+  mealPlanQueue MealPlanQueue[]
+  plannedMeals  PlannedMeal[]
 }
+
 model Session {
   id        String   @id @default(cuid())
   token     String   @unique
@@ -60,6 +63,39 @@ model Recipe {
   mealTypes  RecipeMealType[]
   equipment  RecipeEquipment[]
   favorites Favorite[]
+  queuedBy    MealPlanQueue[]
+  plannedMeals PlannedMeal[]
+}
+
+model MealPlanQueue {
+  id        String   @id @default(cuid())
+  userId    String
+  recipeId  String
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipe Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, recipeId])
+  @@index([userId, createdAt])
+}
+
+model PlannedMeal {
+  id        String   @id @default(cuid())
+  userId    String
+  recipeId  String
+  date      DateTime
+  mealTypeId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipe   Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  mealType MealType @relation(fields: [mealTypeId], references: [id], onDelete: Restrict)
+
+  @@index([userId, date])
+  @@index([recipeId])
+  @@index([mealTypeId])
 }
 
 model Ingredient {
@@ -91,9 +127,9 @@ model RecipeIngredient {
 }
 
 model Category {
-  id   String @id @default(cuid())
-  name String @unique
-
+  id      String @id @default(cuid())
+  name    String @unique
+  image   String?
   recipes RecipeCategory[]
 }
 
@@ -163,6 +199,7 @@ model MealType {
   name String @unique
 
   recipes RecipeMealType[]
+  plannedMeals PlannedMeal[]
 }
 
 model RecipeMealType {

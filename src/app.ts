@@ -7,11 +7,13 @@ import cookieParser from "cookie-parser";
 import recipeRoutes from "./routes/recipe.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import shoppingListRoutes from "./routes/shopping-list.routes.js";
+import categoryRoutes from "./routes/category.routes.js";
+import plannerRoutes from "./routes/planner-routes.js";
 const app = express();
 
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: ["http://localhost:5173", "http://localhost:4173"],
     credentials: true,
   }),
 );
@@ -20,8 +22,10 @@ app.use(cookieParser());
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.use("/api/auth", authRoutes);
 app.use("/api/recipes", recipeRoutes);
+app.use("/api/categories", categoryRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/shopping-list", shoppingListRoutes);
+app.use("/api/planner", plannerRoutes);
 app.get("/api/test-db", async (_req, res) => {
   try {
     const users = await prisma.user.findMany();

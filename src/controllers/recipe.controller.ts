@@ -6,6 +6,7 @@ export const getRecipes = async (req: Request, res: Response) => {
   try {
     const {
       query,
+      category,
       cuisine,
       diet,
       intolerances,
@@ -76,7 +77,19 @@ export const getRecipes = async (req: Request, res: Response) => {
         mode: "insensitive",
       };
     }
-
+    /// category
+    if (category) {
+      where.categories = {
+        some: {
+          category: {
+            name: {
+              equals: String(category),
+              mode: "insensitive",
+            },
+          },
+        },
+      };
+    }
     // -------------------------
     // Cuisine
     // -------------------------
