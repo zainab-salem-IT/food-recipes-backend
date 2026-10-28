@@ -3,6 +3,7 @@ generator client {
   output   = "../src/generated/prisma"
 }
 
+
 datasource db {
   provider = "postgresql"
 }
@@ -289,3 +290,4 @@ model ShoppingListItem {
   @@index([ingredientId])
   @@unique([userId, ingredientId])
 }
+

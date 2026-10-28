@@ -2,6 +2,23 @@ import type { Request, Response } from "express";
 import { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../lib/prisma.js";
 
+
+type PlannedMealWithRelations = Prisma.PlannedMealGetPayload<{
+  include: {
+    recipe: {
+      select: {
+        id: true;
+        title: true;
+        image: true;
+        totalTime: true;
+      };
+    };
+    mealType: true;
+  };
+}>;
+
+const plannedMeals: PlannedMealWithRelations[] = [];
+
 // POST /api/planner/queue/:recipeId
 export const addRecipeToQueue = async (req: Request, res: Response) => {
   try {
@@ -140,12 +157,13 @@ export const removeRecipeFromQueue = async (req: Request, res: Response) => {
   }
 };
 
-// POST /api/planner/queue/:recipeId/schedule
+
+ // POST /api/planner/queue/:recipeId/schedule
 export const scheduleRecipe = async (req: Request, res: Response) => {
   try {
     const userId = req.user.id;
     const recipeId = req.params.recipeId;
-    const { date, mealTypeId } = req.body;
+    const { dates } = req.body;
 
     if (typeof recipeId !== "string" || !recipeId.trim()) {
       return res.status(400).json({
@@ -153,29 +171,79 @@ export const scheduleRecipe = async (req: Request, res: Response) => {
       });
     }
 
-    if (
-      typeof date !== "string" ||
-      !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
-      typeof mealTypeId !== "string" ||
-      !mealTypeId.trim()
-    ) {
+    if (!Array.isArray(dates) || dates.length < 1) {
       return res.status(400).json({
-        message: "A valid date and meal type are required",
+        message: "At least two dates are required",
       });
     }
 
-    const parsedDate = new Date(`${date}T00:00:00.000Z`);
+    // Validate each date and meal type
+    for (const item of dates) {
+      if (
+        !item ||
+        typeof item.date !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(item.date) ||
+        typeof item.mealType !== "string" ||
+        !item.mealType.trim()
+      ) {
+        return res.status(400).json({
+          message: "Each date must have a valid date and meal type",
+        });
+      }
 
-    if (
-      Number.isNaN(parsedDate.getTime()) ||
-      parsedDate.toISOString().slice(0, 10) !== date
-    ) {
+      const parsedDate = new Date(`${item.date}T00:00:00.000Z`);
+
+      if (
+        Number.isNaN(parsedDate.getTime()) ||
+        parsedDate.toISOString().slice(0, 10) !== item.date
+      ) {
+        return res.status(400).json({
+          message: `Invalid calendar date: ${item.date}`,
+        });
+      }
+    }
+
+    // Prevent duplicate selections for the same date and meal type
+    const selections = new Set<string>();
+
+    for (const item of dates) {
+      const key = `${item.date}:${item.mealType.trim()}`;
+
+      if (selections.has(key)) {
+        return res.status(400).json({
+          message: "Duplicate date and meal type selection",
+        });
+      }
+
+      selections.add(key);
+    }
+
+    // Find all requested meal types
+    const mealTypeNames = [
+      ...new Set(dates.map((item) => item.mealType.trim())),
+    ];
+
+    const mealTypes = await prisma.mealType.findMany({
+      where: {
+        name: { in: mealTypeNames },
+      },
+    });
+
+    const mealTypeMap = new Map(
+      mealTypes.map((mealType) => [mealType.name, mealType]),
+    );
+
+    const invalidMealType = mealTypeNames.find(
+      (name) => !mealTypeMap.has(name),
+    );
+
+    if (invalidMealType) {
       return res.status(400).json({
-        message: "Invalid calendar date",
+        message: `Invalid meal type: ${invalidMealType}`,
       });
     }
 
-    const plannedMeal = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const queuedRecipe = await tx.mealPlanQueue.findFirst({
         where: { userId, recipeId },
       });
@@ -184,56 +252,51 @@ export const scheduleRecipe = async (req: Request, res: Response) => {
         return null;
       }
 
-      const mealType = await tx.mealType.findUnique({
-        where: { id: mealTypeId },
-      });
+      const plannedMeals = [];
 
-      if (!mealType) {
-        return "INVALID_MEAL_TYPE" as const;
+      for (const item of dates) {
+        const mealType = mealTypeMap.get(item.mealType.trim())!;
+
+        const plannedMeal = await tx.plannedMeal.create({
+          data: {
+            userId,
+            recipeId,
+            date: new Date(`${item.date}T00:00:00.000Z`),
+            mealTypeId: mealType.id,
+          },
+          include: {
+            recipe: {
+              select: {
+                id: true,
+                title: true,
+                image: true,
+                totalTime: true,
+              },
+            },
+            mealType: true,
+          },
+        });
+
+        plannedMeals.push(plannedMeal);
       }
 
-      const planned = await tx.plannedMeal.create({
-        data: {
-          userId,
-          recipeId,
-          date: parsedDate,
-          mealTypeId,
-        },
-        include: {
-          recipe: {
-            select: {
-              id: true,
-              title: true,
-              image: true,
-              totalTime: true,
-            },
-          },
-          mealType: true,
-        },
-      });
-
+      // Delete the queue item once, after creating all scheduled meals
       await tx.mealPlanQueue.delete({
         where: { id: queuedRecipe.id },
       });
 
-      return planned;
+      return plannedMeals;
     });
 
-    if (!plannedMeal) {
+    if (!result) {
       return res.status(404).json({
         message: "Recipe was not found in your planning queue",
       });
     }
 
-    if (plannedMeal === "INVALID_MEAL_TYPE") {
-      return res.status(400).json({
-        message: "Invalid meal type",
-      });
-    }
-
     return res.status(201).json({
       message: "Recipe scheduled successfully",
-      plannedMeal,
+      plannedMeals: result,
     });
   } catch (error) {
     console.error("Schedule recipe error:", error);
@@ -243,6 +306,7 @@ export const scheduleRecipe = async (req: Request, res: Response) => {
     });
   }
 };
+
 
 // GET /api/planner/meals?startDate=2026-10-12&endDate=2026-10-18
 export const getPlannedMeals = async (req: Request, res: Response) => {
